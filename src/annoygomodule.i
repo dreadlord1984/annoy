@@ -75,8 +75,8 @@
 
 %typemap(in) (const char *)
 %{
-  $1 = (char *)malloc((((_gostring_)$input).n + 1) * sizeof(char));
-  strcpy($1, ((_gostring_)$input).p);
+  $1 = (char *)calloc((((_gostring_)$input).n + 1), sizeof(char));
+  strncpy($1, (((_gostring_)$input).p), ((_gostring_)$input).n);
 %}
 
 %typemap(freearg) (const char *)
@@ -90,6 +90,7 @@
 
 %feature("notabstract") GoAnnoyIndexAngular;
 %feature("notabstract") GoAnnoyIndexEuclidean;
+%feature("notabstract") GoAnnoyIndexManhattan;
 
 
 

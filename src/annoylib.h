@@ -60,19 +60,6 @@ using std::pair;
 using std::numeric_limits;
 using std::make_pair;
 
-struct RandRandom {
-  // Default implementation of annoy-specific random number generator that uses rand() from standard library.
-  // Owned by the AnnoyIndex, passed around to the distance metrics
-  inline int flip() {
-    // Draw random 0 or 1
-    return rand() & 1;
-  }
-  inline size_t index(size_t n) {
-    // Draw random integer between 0 and n-1 where n is at most the number of data points you have
-    return rand() % n;
-  }
-};
-
 template<typename T>
 inline T get_norm(T* v, int f) {
   T sq_norm = 0;
@@ -196,7 +183,7 @@ struct Angular {
   }
 };
 
-struct Euclidean {
+struct Minkowski {
   template<typename S, typename T>
   struct ANNOY_NODE_ATTRIBUTE Node {
     S n_descendants;
@@ -204,13 +191,6 @@ struct Euclidean {
     S children[2];
     T v[1];
   };
-  template<typename T>
-  static inline T distance(const T* x, const T* y, int f) {
-    T d = 0.0;
-    for (int i = 0; i < f; i++, x++, y++)
-      d += ((*x) - (*y)) * ((*x) - (*y));
-    return d;
-  }
   template<typename S, typename T>
   static inline T margin(const Node<S, T>* n, const T* y, int f) {
     T dot = n->a;
@@ -225,6 +205,17 @@ struct Euclidean {
       return (dot > 0);
     else
       return random.flip();
+  }
+};
+
+
+struct Euclidean : Minkowski{
+  template<typename T>
+  static inline T distance(const T* x, const T* y, int f) {
+    T d = 0.0;
+    for (int i = 0; i < f; i++, x++, y++)
+      d += ((*x) - (*y)) * ((*x) - (*y));
+    return d;
   }
   template<typename S, typename T, typename Random>
   static inline void create_split(const vector<Node<S, T>*>& nodes, int f, Random& random, Node<S, T>* n) {
@@ -247,12 +238,42 @@ struct Euclidean {
   }
 };
 
+struct Manhattan : Minkowski{
+  template<typename T>
+  static inline T distance(const T* x, const T* y, int f) {
+    T d = 0.0;
+    for (int i = 0; i < f; i++, x++, y++)
+      d += fabs((*x) - (*y));
+    return d;
+  }
+  template<typename S, typename T, typename Random>
+  static inline void create_split(const vector<Node<S, T>*>& nodes, int f, Random& random, Node<S, T>* n) {
+    vector<T> best_iv(f, 0), best_jv(f, 0);
+    two_means<T, Random, Manhattan, Node<S, T> >(nodes, f, random, false, &best_iv[0], &best_jv[0]);
+
+    for (int z = 0; z < f; z++)
+      n->v[z] = best_iv[z] - best_jv[z];
+    normalize(n->v, f);
+    n->a = 0.0;
+    for (int z = 0; z < f; z++)
+      n->a += -n->v[z] * (best_iv[z] + best_jv[z]) / 2;
+  }
+  template<typename T>
+  static inline T normalized_distance(T distance) {
+    return std::max(distance, T(0));
+  }
+  static const char* name() {
+    return "manhattan";
+  }
+};
+
 template<typename S, typename T>
 class AnnoyIndexInterface {
  public:
   virtual ~AnnoyIndexInterface() {};
   virtual void add_item(S item, const T* w) = 0;
   virtual void build(int q) = 0;
+  virtual void unbuild() = 0;
   virtual bool save(const char* filename) = 0;
   virtual void unload() = 0;
   virtual bool load(const char* filename) = 0;
@@ -262,6 +283,7 @@ class AnnoyIndexInterface {
   virtual S get_n_items() = 0;
   virtual void verbose(bool v) = 0;
   virtual void get_item(S item, T* v) = 0;
+  virtual void set_seed(int q) = 0;
 };
 
 template<typename S, typename T, typename Distance, typename Random>
@@ -341,8 +363,10 @@ public:
       if (_verbose) showUpdate("pass %zd...\n", _roots.size());
 
       vector<S> indices;
-      for (S i = 0; i < _n_items; i++)
-        indices.push_back(i);
+      for (S i = 0; i < _n_items; i++) {
+	if (_get(i)->n_descendants >= 1) // Issue #223
+	  indices.push_back(i);
+      }
 
       _roots.push_back(_make_tree(indices));
     }
@@ -354,6 +378,16 @@ public:
     _n_nodes += _roots.size();
 
     if (_verbose) showUpdate("has %d nodes\n", _n_nodes);
+  }
+  
+  void unbuild() {
+    if (_loaded) {
+      showUpdate("You can't unbuild a loaded index\n");
+      return;
+    }
+
+    _roots.clear();
+    _n_nodes = _n_items;
   }
 
   bool save(const char* filename) {
@@ -451,6 +485,10 @@ public:
   void get_item(S item, T* v) {
     Node* m = _get(item);
     std::copy(&m->v[0], &m->v[_f], v);
+  }
+
+  void set_seed(int seed) {
+    _random.set_seed(seed);
   }
 
 protected:
@@ -585,7 +623,7 @@ protected:
 
     size_t m = nns_dist.size();
     size_t p = n < m ? n : m; // Return this many items
-    std::partial_sort(&nns_dist[0], &nns_dist[p], &nns_dist[m]);
+    std::partial_sort(nns_dist.begin(), nns_dist.begin() + p, nns_dist.end());
     for (size_t i = 0; i < p; i++) {
       if (distances)
         distances->push_back(D::normalized_distance(nns_dist[i].first));

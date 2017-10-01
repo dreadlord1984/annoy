@@ -34,7 +34,7 @@ Annoy was built by `Erik Bernhardsson <http://www.erikbern.com>`__ in a couple o
 Summary of features
 -------------------
 
-* Euclidean distance or cosine distance, where cosine distance uses Euclidean distance of normalized vectors = sqrt(2-2*cos(u, v))
+* Euclidean distance, Manhattan distance or cosine distance, where cosine distance uses Euclidean distance of normalized vectors = sqrt(2-2*cos(u, v))
 * Works better if you don't have too many dimensions (like <100) but seems to perform surprisingly well even up to 1,000 dimensions
 * Small memory usage
 * Lets you share memory between multiple processes
@@ -69,7 +69,7 @@ Right now it only accepts integers as identifiers for items. Note that it will a
 Full Python API
 ---------------
 
-* ``AnnoyIndex(f, metric='angular')`` returns a new index that's read-write and stores vector of ``f`` dimensions. Metric can be either ``"angular"`` or ``"euclidean"``.
+* ``AnnoyIndex(f, metric='angular')`` returns a new index that's read-write and stores vector of ``f`` dimensions. Metric can be ``"angular"``, ``"euclidean"`` or ``"manhattan"``.
 * ``a.add_item(i, v)`` adds item ``i`` (any nonnegative integer) with vector ``v``. Note that it will allocate memory for ``max(i)+1`` items.
 * ``a.build(n_trees)`` builds a forest of ``n_trees`` trees. More trees gives higher precision when querying. After calling ``build``, no more items can be added.
 * ``a.save(fn)`` saves the index to disk.
@@ -115,6 +115,7 @@ More info
 * There is `experimental support for Go <https://github.com/spotify/annoy/blob/master/README_GO.rst>`__ provided by Taneli Leppä.
 * Boris Nagaev wrote `Lua bindings <https://github.com/spotify/annoy/blob/master/README_Lua.md>`__.
 * During part of Spotify Hack Week 2016 (and a bit afterward), Jim Kang wrote `Node bindings <https://github.com/jimkang/annoy-node>`__ for Annoy.
+* Min-Seok Kim built a `Scala version <https://github.com/mskimm/ann4s>`__ of Annoy.
 * `Presentation from New York Machine Learning meetup <http://www.slideshare.net/erikbern/approximate-nearest-neighbor-methods-and-vector-models-nyc-ml-meetup>`__ about Annoy
 * Radim Řehůřek's blog posts comparing Annoy to a couple of other similar Python libraries: `Intro <http://radimrehurek.com/2013/11/performance-shootout-of-nearest-neighbours-intro/>`__, `Contestants <http://radimrehurek.com/2013/12/performance-shootout-of-nearest-neighbours-contestants/>`__, `Querying <http://radimrehurek.com/2014/01/performance-shootout-of-nearest-neighbours-querying/>`__
 * `ann-benchmarks <https://github.com/erikbern/ann-benchmarks>`__ is a benchmark for several approximate nearest neighbor libraries. Annoy seems to be fairly competitive, especially at higher precisions:
